@@ -401,3 +401,133 @@ The negative coefficients on `Max Packet Length` and `Flow Duration` are initial
 - Kucukelbir, A., Tran, D., Ranganath, R., Gelman, A., & Blei, D. M. (2017). *Automatic Differentiation Variational Inference*. JMLR.
 - PyMC Development Team. [pymc.io](https://www.pymc.io)
 - ArviZ Development Team. [python.arviz.org](https://python.arviz.org)
+
+
+## Solana Blockchain Extension (Web3 Telemetry)
+
+This section extends the CIC-IDS2017 intrusion detection work into a **Web3 telemetry / blockchain monitoring** setting. The goal is to define a cyber threat detection problem on a blockchain that is realistically monitorable via **Bayesian statistics**, retrieve the relevant telemetry from public datasets, and execute a Bayesian detection method on the resulting time series.
+
+---
+
+### Motivation: Bayesian Cyber Attack Detection on Blockchains
+
+Across industry, companies are required to monitor computer and application telemetry for both regulatory (cybersecurity) and business purposes. A niche and underexplored telemetry domain exists in the Web3 space: **blockchains and their applications produce large volumes of public, queryable event data**.
+
+This extension focuses on:
+- defining blockchain security / abuse problems that can be detected via statistical changes in telemetry,
+- identifying and retrieving the telemetry (via public datasets),
+- and applying Bayesian detection to identify abnormal changes.
+
+---
+
+### Blockchain of Focus: Solana (BigQuery Public Dataset)
+
+We analyze the **Solana** blockchain using Google BigQuery’s public dataset:
+
+- Dataset: `bigquery-public-data.crypto_solana_mainnet_us`
+- Table used: `Instructions`
+
+The notebook references the BigQuery marketplace listing for the dataset.
+
+---
+
+### Incident Context: Why Volume-Based Detection Matters
+
+The notebook includes examples of Solana/Web3 incidents (from local reference CSVs). A key practical takeaway is that **not all exploits create a measurable volume/frequency signal** in the telemetry tables we can easily query.
+
+For instance, some protocol exploits (e.g., certain bridge or oracle failures) may not correspond to a clear change in instruction counts, whereas **spam/bot overload events** often *do* appear as sharp shifts in activity volume.
+
+This project therefore focuses on an event type that is compatible with volume-based Bayesian monitoring: abnormal surges in instruction activity during high-demand NFT mint periods.
+
+---
+
+### Data Retrieval: Hourly Timeseries from Solana Instructions
+
+Two BigQuery queries are used to construct hourly timeseries signals.
+
+#### 1) Global instruction activity (hourly counts)
+
+```sql
+SELECT
+  TIMESTAMP_TRUNC(block_timestamp, HOUR) AS time_interval_hour,
+  COUNT(*) AS total_instruction_activity 
+FROM `bigquery-public-data.crypto_solana_mainnet_us.Instructions` 
+WHERE block_timestamp BETWEEN '2022-01-01 00:00:00' AND '2022-10-30 00:00:00'
+GROUP BY time_interval_hour
+ORDER BY time_interval_hour
+```
+
+This produces a global baseline series for overall Solana instruction activity.
+
+#### 2) Targeted activity: `mintTo` instruction counts (hourly)
+
+```sql
+SELECT
+  TIMESTAMP_TRUNC(block_timestamp, HOUR) AS time_interval_hour,
+  COUNT(*) AS total_instruction_activity 
+FROM `bigquery-public-data.crypto_solana_mainnet_us.Instructions` 
+WHERE instruction_type = 'mintTo' 
+AND block_timestamp BETWEEN '2022-01-01 00:00:00' AND '2022-10-30 00:00:00'
+GROUP BY time_interval_hour
+ORDER BY time_interval_hour
+```
+
+This produces a more incident-relevant telemetry stream for NFT mint-related activity.
+
+---
+
+### Global Timeseries Analysis (Outages / Downspikes)
+
+![Global Solana Activity](global%20solana%20activity.png)
+
+The notebook plots overall Solana instruction activity over time and notes the presence of repeated **downspikes**. These are interpreted as times of large-scale network outages or degraded availability.
+
+The notebook text connects a notable outage window to an NFT minting / bot-overload event timeframe (the notebook frames the incident as **April/May 2022**).
+
+---
+
+### Bayesian Detection: Bot Overload Incident (April/May 2022)
+
+To detect a regime shift in mint-related activity, the notebook runs a Bayesian change point model on a smoothed mint instruction series.
+
+#### Signal engineered for detection
+
+- Source series: hourly `mint_instructions`
+- Smoothing: **12-hour rolling average** (`mint_rolling_avg_12`)
+
+This smoothing reduces high-frequency noise while preserving sustained shifts in behavior.
+
+#### Bayesian change point model (PyMC, MCMC)
+![MCMC Prior](mcmc%20prior.png)
+![MCMC Change Point Activity](mcmc.png)
+The model treats the time series as having:
+- an unknown discrete **change point** index, and
+- different mean/variance parameters before vs. after the change point.
+
+MCMC sampling is used to infer the posterior distribution over the change point.
+
+#### Result (from notebook output)
+
+The notebook’s modal estimate for the change point is:
+
+- **Most likely change point index:** `918`
+- **Most likely change point timestamp:** **2022-04-27 17:00:00+00:00**
+
+The notebook also visualizes:
+- the posterior distribution over the change point timestamp, and
+- the rolling-average time series with the inferred change point overlaid.
+
+#### Interpretation
+
+Bayesian change point detection is useful in this setting because it attempts to identify the time at which the underlying generative process changes (an operational regime shift). For blockchain monitoring, this can support detection of events like bot-driven surges, spam campaigns, or other shifts in usage patterns that correlate with service degradation.
+
+---
+
+### Notebook Files Referenced (Local Artifacts)
+
+The notebook references the following local files (not necessarily committed to the repository):
+
+- `solana_attack_list.csv`
+- `web3_crypto_attacks_with_dates.csv`
+- `solana_blockchain_instructiondata_totalvol.csv`
+- `solana_blocks_hourly2.csv`
