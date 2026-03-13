@@ -440,7 +440,49 @@ For instance, some protocol exploits (e.g., certain bridge or oracle failures) m
 This project therefore focuses on an event type that is compatible with volume-based Bayesian monitoring: abnormal surges in instruction activity during high-demand NFT mint periods.
 
 ---
+### Incident Context: Why Volume-Based Detection Matters
 
+One important component of this analysis was selecting a problem that could actually be monitored by Bayesian statistics using **public Solana telemetry** (i.e., time series derived from the BigQuery `Instructions` table).
+
+Originally, we considered high-profile exploits such as **Wormhole (2/2/2022)**. However, many bridge / smart-contract exploits are **not associated with a clear volume or frequency change** in the broad instruction-count signals we can easily query (global instruction counts, or simple instruction-type filters). In other words: they are critical cybersecurity incidents, but they are *not well matched* to a regime-shift detector that relies on volume-based telemetry.
+
+Instead, we pivoted to an incident type that *is* compatible with this approach: **spam / bot-overload events** during high-demand NFT mint periods, which often appear as sharp, sustained shifts in instruction activity volume.
+
+---
+
+### Solana Incident Table (Reference List)
+
+The table below summarizes notable Solana ecosystem incidents (largely DeFi / protocol exploits) for context, and explicitly notes whether each incident is expected to produce a measurable **volume/frequency signal** in `Instructions`-based time series.
+
+| Attack target | Loss amount | Attack method | Attack time | Expected volume/frequency signal in `Instructions`? | Notes (why/why not) |
+|---|---:|---|---|---|---|
+| Solend | $1,260,000 | Oracle attack | 2022-11-02 | **Low / unclear** | Likely concentrated in a specific program and short window; not necessarily a chain-wide activity regime shift. |
+| Mango | $100,000,000 | Flash loan | 2022-10-11 | **Low / unclear** | Large loss, but may not create a global instruction-count jump; would require program-specific feature engineering. |
+| TulipProtocol | $2,500,000 | Mango attack (contagion) | 2022-10-12 | **Low / unclear** | Follow-on / related exploitation; signal likely localized. |
+| UXD Protocol | $20,000,000 | Mango attack (contagion) | 2022-10-12 | **Low / unclear** | Similar to above; may not show in aggregate instruction volume. |
+| OptiFi | 661,000 USDC | Operational error | 2022-08-29 | **No** | Operational mistake, not an on-chain activity surge pattern. |
+| Nirvana | $3,500,000 | Flash loan | 2022-07-28 | **Low / unclear** | Potential localized spike; not guaranteed to register as a regime shift in chain-wide telemetry. |
+| Crema Finance | $1,682,000 | Flash loan | 2022-07-03 | **Low / unclear** | Same limitation: exploit impact ≠ measurable instruction-count regime change. |
+| Jet Protocol | Unknown | Unknown | 2022-03-30 | **Unknown** | Insufficient detail; would require additional incident metadata to map to telemetry. |
+| Cashio | $52,027,994 | Bypassed unverified accounts | 2022-03-23 | **Low / unclear** | Could involve minting / accounting abuse; still likely program-specific rather than global. |
+| Wormhole | 120,000 ETH | Forged signatures enabled by developer / verification failure | 2022-02-02 | **No (for this project’s signals)** | High-impact exploit, but not primarily a volume anomaly in instruction-count telemetry. |
+
+> **Takeaway:** Many “big theft” exploits are not well-detected by simple *volume-based* telemetry. That limitation is why this project’s Bayesian change point detection focuses on **spam/bot overload activity** (a regime shift) rather than contract exploit detection.
+
+---
+
+### Why We Pivoted to Spam/Bot Overload Detection
+
+A second category of incidents is directly aligned with this repo’s methodology:
+
+| Attack type | Platform / project | Approx. damages | Signal (volume/frequency change) | Approximate date |
+|---|---|---|---|---|
+| DDoS / spam on validators | Solana | No direct theft; economic impact via downtime / degraded availability | Sudden surge in TPS / instruction volume / RPC calls overwhelming validators | *(varies; depends on incident)* |
+| Web/API abuse on DeFi frontends | Ethereum, Solana NFT mints | Users waste significant fees in aggregate; degraded UX and failed mints | Surges in HTTP requests and transaction submission during mint windows | *(varies; depends on incident)* |
+
+This project therefore focuses on a specific spam/bot overload window where the notebook’s Bayesian change point model estimated the most likely change point at:
+
+- **Most likely change point timestamp:** **2022-04-27 17:00:00+00:00**
 ### Data Retrieval: Hourly Timeseries from Solana Instructions
 
 Two BigQuery queries are used to construct hourly timeseries signals.
